@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-# import whisper
+import whisper
 from fastapi import FastAPI, File, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -16,7 +16,8 @@ import io
 
 # load model and processor
 processor = WhisperProcessor.from_pretrained("openai/whisper-medium")
-model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-medium")
+# model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-medium")
+model = whisper.load_model("small")
 forced_decoder_ids = processor.get_decoder_prompt_ids(language="french", task="translate")
 
 # load streaming dataset and read first audio sample
@@ -107,7 +108,7 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
             return {
                 "success": True,
                 "text": transcription,
-                "language": "Persian"  # Since we're using French translation
+                "language": "English"  # Since we're using French translation
             }
         except IOError as e:
             print(f"IOError while processing file: {str(e)}")
@@ -127,3 +128,44 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
             print("Temporary files cleaned up successfully")
         except Exception as e:
             print(f"Error cleaning up temporary files: {str(e)}") 
+
+
+def display_words_and_probs(result):
+    # Start with container div
+    html_output = '<div class="word-prob-container">'
+    
+    # Create individual word-probability pairs in their own divs
+    for item in result:
+        word = item['word']
+        prob = round(item['probability'], 2)
+        html_output += f'''
+            <div class="word-prob-pair">
+                <div class="word">{word}</div>
+                <div class="probability">{prob:.2f}</div>
+            </div>
+        '''
+    
+    html_output += '</div>'
+    return html_output
+
+@app.post("/placeholder/")
+async def placeholder():
+    try:
+
+        audio_file = "../hello.wav" #change from hardcoded to uploaded file
+        output = model.transcribe(audio_file, word_timestamps=True, language="en")
+        print(output)
+        print(output['segments'][0]['words'])
+        relevant_info = output['segments'][0]['words']
+        print(relevant_info)
+        innerHTML = display_words_and_probs(relevant_info)
+        return {
+            "success": True,
+            "text": relevant_info[0]['word'],
+            "language": "English",
+            "innerHTML": innerHTML
+        }
+    except IOError as e:
+        print(f"IOError while processing file: {str(e)}")
+        return {"success": False, "error": f"Failed to process file: {str(e)}"}
+        
