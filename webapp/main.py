@@ -48,6 +48,26 @@ templates = Jinja2Templates(directory="templates")
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+
+def display_words_and_probs(result):
+    html_output = '<div class="word-prob-container">'
+    
+    for item in result:
+        word = item['word']
+        prob = round(item['probability'], 2)
+        # Determine color class based on probability
+        color_class = 'high-score' if prob >= 0.8 else 'low-score'
+        
+        html_output += f'''
+            <div class="word-prob-pair">
+                <div class="word {color_class}">{word}</div>
+                <div class="probability {color_class}">{prob:.2f}</div>
+            </div>
+        '''
+    
+    html_output += '</div>'
+    return html_output
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -99,15 +119,23 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
                 return_tensors="pt"
             ).input_features
             print("Features extracted successfully")
+            print(input_features, temp_file, audio_array, audio_file)
+            output = model.transcribe(str(wav_path), word_timestamps=True, language="en")
+        
+        
+            relevant_info = output['segments'][0]['words']
+            
+            innerHTML = display_words_and_probs(relevant_info)
             
             # Generate token ids
-            predicted_ids = model.generate(input_features, forced_decoder_ids=forced_decoder_ids)
+            # predicted_ids = model.generate(input_features, forced_decoder_ids=forced_decoder_ids)
             # Decode token ids to text
-            transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
-            
+            # transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+
             return {
                 "success": True,
-                "text": transcription,
+                "text": output['text'],
+                "innerHTML": innerHTML,
                 "language": "English"  # Since we're using French translation
             }
         except IOError as e:
@@ -130,23 +158,7 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
             print(f"Error cleaning up temporary files: {str(e)}") 
 
 
-def display_words_and_probs(result):
-    # Start with container div
-    html_output = '<div class="word-prob-container">'
-    
-    # Create individual word-probability pairs in their own divs
-    for item in result:
-        word = item['word']
-        prob = round(item['probability'], 2)
-        html_output += f'''
-            <div class="word-prob-pair">
-                <div class="word">{word}</div>
-                <div class="probability">{prob:.2f}</div>
-            </div>
-        '''
-    
-    html_output += '</div>'
-    return html_output
+
 
 @app.post("/placeholder/")
 async def placeholder():
@@ -154,10 +166,10 @@ async def placeholder():
 
         audio_file = "../hello.wav" #change from hardcoded to uploaded file
         output = model.transcribe(audio_file, word_timestamps=True, language="en")
-        print(output)
-        print(output['segments'][0]['words'])
+        
+        
         relevant_info = output['segments'][0]['words']
-        print(relevant_info)
+        
         innerHTML = display_words_and_probs(relevant_info)
         return {
             "success": True,

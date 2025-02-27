@@ -52,7 +52,7 @@
         .word-prob-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 2rem;  /* Adds space between word-probability pairs */
+            gap: 2rem;
             font-family: monospace;
             margin: 1rem 0;
         }
@@ -61,7 +61,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-width: 60px;  /* Ensures minimum width for each pair */
+            min-width: 60px;
             text-align: center;
         }
 
@@ -71,8 +71,16 @@
         }
 
         .probability {
-            color: #666;
             font-size: 0.9rem;
+        }
+
+        /* Color classes */
+        .high-score {
+            color: #2ecc71;  /* Green color for high scores */
+        }
+
+        .low-score {
+            color: #e74c3c;  /* Red color for low scores */
         }
     </style>
 </head>
@@ -101,9 +109,6 @@
         recordButton.addEventListener('click', toggleRecording);
         sendButton.addEventListener('click', send);
         async function send() {
-            // const formData = new FormData();
-            // const filename = `hello.wav`;
-            // formData.append('audio_file', audioBlob, filename);
             const response = await fetch('/placeholder/', {
                 method: 'POST',
                 body: {}
@@ -175,6 +180,7 @@
                 
                 if (result.success) {
                     transcription.textContent = result.text;
+                    document.getElementById('result').innerHTML = result.innerHTML; 
                     status.textContent = `Transcription complete (${result.language})`;
                 } else {
                     status.textContent = 'Error: ' + result.error;
