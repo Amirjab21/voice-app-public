@@ -60,7 +60,7 @@ except Exception as e:
 app = FastAPI(title="Whisper Voice Note Transcriber")
 
 # Mount static files
-# app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Setup templates
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -186,10 +186,11 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
 
 
 @app.post("/placeholder/")
-async def placeholder():
+async def placeholder(request: Request):
     try:
-
-        audio_file = "../hello.wav" #change from hardcoded to uploaded file
+        body = await request.json()
+        audio_file = body.get('audioFile', "./sample_audio/BI0003_scottish.wav")
+        # audio_file = "./sample_audio/BI0003_scottish.wav" #change from hardcoded to uploaded file
         output = model.transcribe(audio_file, word_timestamps=True, language="en")
         
         

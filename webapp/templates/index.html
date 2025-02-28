@@ -85,6 +85,7 @@
     </style>
 </head>
 <body>
+    <audio id="sampleAudio" src="/static/BI0003_scottish.wav"></audio>
     <div class="container">
         <h1>Voice Note Transcriber</h1>
         <div class="controls">
@@ -92,6 +93,8 @@
         </div>
         <div>
             <button id="send">Send</button>
+            <button id="sendEnglish">Send English</button>
+
         </div>
         <div class="status" id="status">Click 'Start Recording' to begin</div>
         <div id="transcription"></div>
@@ -105,13 +108,17 @@
         const status = document.getElementById('status');
         const transcription = document.getElementById('transcription');
         const sendButton = document.getElementById('send');
+        const sendEnglishButton = document.getElementById('sendEnglish');
+        sendEnglishButton.addEventListener('click', sendEnglish);
 
         recordButton.addEventListener('click', toggleRecording);
         sendButton.addEventListener('click', send);
         async function send() {
+            const audio = document.getElementById('sampleAudio');
+            audio.play();
             const response = await fetch('/placeholder/', {
                 method: 'POST',
-                body: {}
+                body: JSON.stringify({ audioFile: './sample_audio/BI0003_scottish.wav' })
             });
 
             const result = await response.json();
@@ -124,6 +131,26 @@
                     status.textContent = 'Error: ' + result.error;
                 }
             
+        }
+
+        async function sendEnglish() {
+            const audio = document.getElementById('sampleAudio');
+            audio.src = '/static/BI0003_southern.wav';
+            audio.play();
+            const response = await fetch('/placeholder/', {
+                method: 'POST',
+                body: JSON.stringify({ audioFile: './sample_audio/BI0003_southern.wav' })
+            });
+
+            const result = await response.json();
+                
+            if (result.success) {
+                document.getElementById('result').innerHTML = result.innerHTML; 
+                transcription.textContent = result.text;
+                status.textContent = `Transcription complete (${result.language})`;
+            } else {
+                status.textContent = 'Error: ' + result.error;
+            }
         }
 
         async function toggleRecording() {
