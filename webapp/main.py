@@ -13,12 +13,36 @@ from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from datasets import Audio, load_dataset
 from pydub import AudioSegment
 import io
-
+import torch
+from peft import PeftModel, PeftConfig, LoraConfig, get_peft_model
+from whisper.load_model import load_model
 # load model and processor
 processor = WhisperProcessor.from_pretrained("openai/whisper-medium")
-# model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-medium")
-model = whisper.load_model("small")
-forced_decoder_ids = processor.get_decoder_prompt_ids(language="french", task="translate")
+# model = whisper.load_model("small")
+# model = load_model("medium")
+
+
+
+DEVICE = torch.device('cpu')
+model = load_model("medium", device=DEVICE)
+
+
+#Load Lora checkpoint
+peft_config = LoraConfig(
+    inference_mode=False, r=8, 
+    target_modules=["out", "token_embedding", "query", "key", "value", "proj_out"],
+    lora_alpha=32, lora_dropout=0.1
+)
+model = get_peft_model(model, peft_config)
+checkpoint_path = str(Path(__file__).parent / "model_weights/lora-medium-ft.pt")
+checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+try:
+    model.load_state_dict(checkpoint['model_state_dict'])
+    print('done')
+except Exception as e:
+    print(f"Error loading state dict:")
+
+# forced_decoder_ids = processor.get_decoder_prompt_ids(language="french", task="translate")
 
 # load streaming dataset and read first audio sample
 # ds = load_dataset("common_voice", "Persian", split="test", streaming=True)
@@ -36,10 +60,11 @@ forced_decoder_ids = processor.get_decoder_prompt_ids(language="french", task="t
 app = FastAPI(title="Whisper Voice Note Transcriber")
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Setup templates
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
 
 # Initialize Whisper model (using the smallest model for quick responses)
 # model = whisper.load_model("tiny")

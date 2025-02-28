@@ -10,3 +10,6 @@ thumbs.db
 .idea
 
 whisper/
+3.12/
+bin/
+python3.11/
