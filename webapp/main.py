@@ -16,6 +16,7 @@ import io
 import torch
 from peft import PeftModel, PeftConfig, LoraConfig, get_peft_model
 from whisper.load_model import load_model
+from scipy import signal
 # load model and processor
 processor = WhisperProcessor.from_pretrained("openai/whisper-medium")
 # model = whisper.load_model("small")
@@ -133,7 +134,7 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
             
             # Resample to 16kHz if needed
             if sampling_rate != 16000:
-                from scipy import signal
+                
                 audio_array = signal.resample(audio_array, int(len(audio_array) * 16000 / sampling_rate))
                 sampling_rate = 16000
             
