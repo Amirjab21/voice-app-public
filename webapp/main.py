@@ -19,29 +19,45 @@ from whisper.load_model import load_model
 from scipy import signal
 # load model and processor
 processor = WhisperProcessor.from_pretrained("openai/whisper-medium")
-# model = whisper.load_model("small")
-# model = load_model("medium")
 
 
-
+lora = False
+finetuned_model_path = None #"model_weights/margin0.5-medium-conv2-only.pt" #"model_weights/finetuned-medium-1.pt"
+model_name = "medium"
 DEVICE = torch.device('cpu')
-model = load_model("medium", device=DEVICE)
+model = load_model(model_name, device=DEVICE)
 
 
 #Load Lora checkpoint
-peft_config = LoraConfig(
-    inference_mode=False, r=8, 
-    target_modules=["out", "token_embedding", "query", "key", "value", "proj_out"],
-    lora_alpha=32, lora_dropout=0.1
-)
-model = get_peft_model(model, peft_config)
-checkpoint_path = str(Path(__file__).parent / "model_weights/lora-medium-ft.pt")
-checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-try:
-    model.load_state_dict(checkpoint['model_state_dict'])
-    print('done')
-except Exception as e:
-    print(f"Error loading state dict:")
+if lora:
+    peft_config = LoraConfig(
+        inference_mode=False, r=8, 
+        target_modules=["out", "token_embedding", "query", "key", "value", "proj_out"],
+        lora_alpha=32, lora_dropout=0.1
+    )
+    model = get_peft_model(model, peft_config)
+    checkpoint_path = str(Path(__file__).parent / "model_weights/lora-medium-ft.pt")
+    checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    try:
+        model.load_state_dict(checkpoint['model_state_dict'])
+        print('done')
+    except Exception as e:
+        print(f"Error loading state dict:")
+elif finetuned_model_path is not None:
+        print('no lora')
+        # model = get_peft_model(model, peft_config)
+        checkpoint_path = str(Path(__file__).parent / finetuned_model_path)
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+        try:
+            model.load_state_dict(checkpoint['model_state_dict'])
+            print('done')
+        except Exception as e:
+            print(f"Error loading state dict:")
+else:
+    print('standard whisper model')
+
+
+
 
 # forced_decoder_ids = processor.get_decoder_prompt_ids(language="french", task="translate")
 
@@ -82,7 +98,7 @@ def display_words_and_probs(result):
         word = item['word']
         prob = round(item['probability'], 2)
         # Determine color class based on probability
-        color_class = 'high-score' if prob >= 0.8 else 'low-score'
+        color_class = 'high-score' if prob >= 0.9 else 'low-score'
         
         html_output += f'''
             <div class="word-prob-pair">

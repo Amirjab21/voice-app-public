@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Note Transcriber</title>
+    <title>TREN YER SCOOTESH ACCENT</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -87,13 +87,13 @@
 <body>
     <audio id="sampleAudio" src="/static/BI0003_scottish.wav"></audio>
     <div class="container">
-        <h1>Voice Note Transcriber</h1>
+        <h1>Duolingo for Scotesh accents</h1>
         <div class="controls">
             <button id="recordButton">Start Recording</button>
         </div>
         <div>
-            <button id="send">Send</button>
-            <button id="sendEnglish">Send English</button>
+            <button id="send">Play Scottish</button>
+            <button id="sendEnglish">Play English</button>
 
         </div>
         <div class="status" id="status">Click 'Start Recording' to begin</div>
@@ -108,6 +108,8 @@
         const status = document.getElementById('status');
         const transcription = document.getElementById('transcription');
         const sendButton = document.getElementById('send');
+        const scottish_audio_file = 'EN1549_scottish.wav';
+        const southern_audio_file = 'EN1549_southern.wav';
         const sendEnglishButton = document.getElementById('sendEnglish');
         sendEnglishButton.addEventListener('click', sendEnglish);
 
@@ -115,37 +117,37 @@
         sendButton.addEventListener('click', send);
         async function send() {
             const audio = document.getElementById('sampleAudio');
+            audio.src = "/static/" + scottish_audio_file;
             audio.play();
             const response = await fetch('/placeholder/', {
                 method: 'POST',
-                body: JSON.stringify({ audioFile: './sample_audio/BI0003_scottish.wav' })
-            });
-
-            const result = await response.json();
-                
-                if (result.success) {
-                    document.getElementById('result').innerHTML = result.innerHTML; 
-                    transcription.textContent = result.text;
-                    status.textContent = `Transcription complete (${result.language})`;
-                } else {
-                    status.textContent = 'Error: ' + result.error;
-                }
-            
-        }
-
-        async function sendEnglish() {
-            const audio = document.getElementById('sampleAudio');
-            audio.src = '/static/BI0003_southern.wav';
-            audio.play();
-            const response = await fetch('/placeholder/', {
-                method: 'POST',
-                body: JSON.stringify({ audioFile: './sample_audio/BI0003_southern.wav' })
+                body: JSON.stringify({ audioFile: "./sample_audio/" + scottish_audio_file })
             });
 
             const result = await response.json();
                 
             if (result.success) {
-                document.getElementById('result').innerHTML = result.innerHTML; 
+                document.getElementById('result').innerHTML += result.innerHTML; 
+                transcription.textContent = result.text;
+                status.textContent = `Transcription complete (${result.language})`;
+            } else {
+                status.textContent = 'Error: ' + result.error;
+            }
+        }
+
+        async function sendEnglish() {
+            const audio = document.getElementById('sampleAudio');
+            audio.src = '/static/' + southern_audio_file;
+            audio.play();
+            const response = await fetch('/placeholder/', {
+                method: 'POST',
+                body: JSON.stringify({ audioFile: './sample_audio/' + southern_audio_file })
+            });
+
+            const result = await response.json();
+                
+            if (result.success) {
+                document.getElementById('result').innerHTML += result.innerHTML; 
                 transcription.textContent = result.text;
                 status.textContent = `Transcription complete (${result.language})`;
             } else {
@@ -207,7 +209,7 @@
                 
                 if (result.success) {
                     transcription.textContent = result.text;
-                    document.getElementById('result').innerHTML = result.innerHTML; 
+                    document.getElementById('result').innerHTML += result.innerHTML; 
                     status.textContent = `Transcription complete (${result.language})`;
                 } else {
                     status.textContent = 'Error: ' + result.error;
