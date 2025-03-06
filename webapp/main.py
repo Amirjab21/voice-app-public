@@ -21,8 +21,8 @@ from scipy import signal
 processor = WhisperProcessor.from_pretrained("openai/whisper-medium")
 
 
-lora = False
-finetuned_model_path = None #"model_weights/margin0.5-medium-conv2-only.pt" #"model_weights/finetuned-medium-1.pt"
+lora = True
+finetuned_model_path = "model_weights/lora-medium-ft.pt" #"model_weights/margin0.5-medium-conv2-only.pt" #"model_weights/finetuned-medium-1.pt"
 model_name = "medium"
 DEVICE = torch.device('cpu')
 model = load_model(model_name, device=DEVICE)
@@ -223,4 +223,6 @@ async def placeholder(request: Request):
     except IOError as e:
         print(f"IOError while processing file: {str(e)}")
         return {"success": False, "error": f"Failed to process file: {str(e)}"}
+    
+    
         
