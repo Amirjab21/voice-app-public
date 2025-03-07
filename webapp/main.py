@@ -17,61 +17,52 @@ import torch
 from peft import PeftModel, PeftConfig, LoraConfig, get_peft_model
 from whisper.load_model import load_model
 from scipy import signal
+from accent_model.accent_model import ModifiedWhisper
 # load model and processor
-processor = WhisperProcessor.from_pretrained("openai/whisper-medium")
+processor = WhisperProcessor.from_pretrained("openai/whisper-small")
 
 
 lora = True
-finetuned_model_path = "model_weights/lora-medium-ft.pt" #"model_weights/margin0.5-medium-conv2-only.pt" #"model_weights/finetuned-medium-1.pt"
-model_name = "medium"
+finetuned_model_path = "model_weights/model_11_accents.pt" #"model_weights/margin0.5-medium-conv2-only.pt" #"model_weights/finetuned-medium-1.pt"
+MODEL_VARIANT = "small"
 DEVICE = torch.device('cpu')
-model = load_model(model_name, device=DEVICE)
+NUM_ACCENT_CLASSES = 11
+ID_TO_ACCENT = {
+    0: "Scottish", 1: "English", 2: "Indian", 3: "Irish", 4: "Welsh",
+    5: "NewZealandEnglish", 6: "AustralianEnglish", 7: "SouthAfrican",
+    8: "Canadian", 9: "NorthernIrish", 10: "American"
+}
 
-
-#Load Lora checkpoint
-if lora:
+def setup_model():
+    base_whisper_model = load_model(MODEL_VARIANT, device=DEVICE)
+    model = ModifiedWhisper(base_whisper_model.dims, NUM_ACCENT_CLASSES, base_whisper_model)
+    
     peft_config = LoraConfig(
-        inference_mode=False, r=8, 
+        inference_mode=True,
+        r=8,
         target_modules=["out", "token_embedding", "query", "key", "value", "proj_out"],
-        lora_alpha=32, lora_dropout=0.1
+        lora_alpha=32,
+        lora_dropout=0.1
     )
     model = get_peft_model(model, peft_config)
-    checkpoint_path = str(Path(__file__).parent / "model_weights/lora-medium-ft.pt")
-    checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    model.print_trainable_parameters()
+    model.to(DEVICE)
+
+
+    checkpoint = torch.load(finetuned_model_path, map_location=torch.device(DEVICE))
     try:
-        model.load_state_dict(checkpoint['model_state_dict'])
-        print('done')
-    except Exception as e:
-        print(f"Error loading state dict:")
-elif finetuned_model_path is not None:
-        print('no lora')
-        # model = get_peft_model(model, peft_config)
-        checkpoint_path = str(Path(__file__).parent / finetuned_model_path)
-        checkpoint = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-        try:
+        if 'model_state_dict' in checkpoint:
             model.load_state_dict(checkpoint['model_state_dict'])
-            print('done')
-        except Exception as e:
-            print(f"Error loading state dict:")
-else:
-    print('standard whisper model')
+            print('Model loaded successfully')
+        else:
+            model.load_state_dict(checkpoint)
+            print('Model loaded successfully')
+    except Exception as e:
+        raise e
+    return model, base_whisper_model
 
+model, base_whisper_model = setup_model()
 
-
-
-# forced_decoder_ids = processor.get_decoder_prompt_ids(language="french", task="translate")
-
-# load streaming dataset and read first audio sample
-# ds = load_dataset("common_voice", "Persian", split="test", streaming=True)
-# ds = ds.cast_column("audio", Audio(sampling_rate=16_000))
-# input_speech = next(iter(ds))["audio"]
-# input_features = processor(input_speech["array"], sampling_rate=input_speech["sampling_rate"], return_tensors="pt").input_features
-
-# # generate token ids
-# predicted_ids = model.generate(input_features, forced_decoder_ids=forced_decoder_ids)
-# # decode token ids to text
-# transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)
-# [' A very interesting work, we will finally be given on this subject.']
 
 # Initialize FastAPI app
 app = FastAPI(title="Whisper Voice Note Transcriber")
@@ -162,23 +153,41 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
             ).input_features
             print("Features extracted successfully")
             print(input_features, temp_file, audio_array, audio_file)
-            output = model.transcribe(str(wav_path), word_timestamps=True, language="en")
-        
-        
-            relevant_info = output['segments'][0]['words']
-            
+
+            print(input_features, 'input features')
+            output, pooled_embed = model(input_features)
+            print(output, 'output')
+            probabilities = torch.nn.functional.softmax(output, dim=1)
+            # probabilities = torch.nn.functional.softmax(output, dim=1)
+            print(probabilities, 'probabilities')
+            predictions = torch.argmax(probabilities, dim=1)
+            predicted_accent = ID_TO_ACCENT[predictions.item()]
+            accent_probabilities = {ID_TO_ACCENT[i]: prob.item() for i, prob in enumerate(probabilities[0])}
+            print(wav_path, 'audio file path')
+
+            newloadedmodel = load_model("small", device=DEVICE)
+            newloadedmodel.to(DEVICE)
+            outputtemp = newloadedmodel.transcribe(str(wav_path), word_timestamps=True, language="en")
+            print(outputtemp, 'outputtemp')
+            output = base_whisper_model.transcribe(str(wav_path), word_timestamps=True, language="en")
+            print(output, 'output')
+            relevant_info = outputtemp['segments'][0]['words']
             innerHTML = display_words_and_probs(relevant_info)
-            
-            # Generate token ids
-            # predicted_ids = model.generate(input_features, forced_decoder_ids=forced_decoder_ids)
-            # Decode token ids to text
-            # transcription = processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+            # innerHTML = ""
+
+            # Create data for the pie chart
+            pie_chart_data = {
+                'labels': list(accent_probabilities.keys()),
+                'values': list(accent_probabilities.values())
+            }
 
             return {
                 "success": True,
-                "text": output['text'],
+                "text": relevant_info[0]['word'], # output['text'],
                 "innerHTML": innerHTML,
-                "language": "English"  # Since we're using French translation
+                "language": "English",
+                "predicted_accent": predicted_accent,
+                "accent_probabilities": pie_chart_data
             }
         except IOError as e:
             print(f"IOError while processing file: {str(e)}")
@@ -206,19 +215,61 @@ async def transcribe_audio(audio_file: UploadFile = File(...)):
 async def placeholder(request: Request):
     try:
         body = await request.json()
-        audio_file = body.get('audioFile', "./sample_audio/BI0003_scottish.wav")
-        # audio_file = "./sample_audio/BI0003_scottish.wav" #change from hardcoded to uploaded file
-        output = model.transcribe(audio_file, word_timestamps=True, language="en")
+        audio_file_path = body.get('audioFile', "./sample_audio/BI0003_scottish.wav")
         
+        audio_array, sampling_rate = sf.read(audio_file_path)
+        print(f"Audio loaded successfully: shape={audio_array.shape}, sampling_rate={sampling_rate}")
         
-        relevant_info = output['segments'][0]['words']
+        # Convert to mono if stereo
+        if len(audio_array.shape) > 1:
+            audio_array = audio_array.mean(axis=1)
         
+        # Resample to 16kHz if needed
+        if sampling_rate != 16000:
+            audio_array = signal.resample(audio_array, int(len(audio_array) * 16000 / sampling_rate))
+            sampling_rate = 16000
+        
+        # Process with Whisper
+        input_features = processor(
+            audio_array, 
+            sampling_rate=sampling_rate, 
+            return_tensors="pt"
+        ).input_features
+        print("Features extracted successfully")
+
+        print(input_features, 'input features')
+        output, pooled_embed = model(input_features)
+        print(output, 'output')
+        probabilities = torch.nn.functional.softmax(output, dim=1)
+        print(probabilities, 'probabilities')
+        predictions = torch.argmax(probabilities, dim=1)
+        predicted_accent = ID_TO_ACCENT[predictions.item()]
+        accent_probabilities = {ID_TO_ACCENT[i]: prob.item() for i, prob in enumerate(probabilities[0])}
+        print(audio_file_path, 'audio file path')
+
+        newloadedmodel = load_model("small", device=DEVICE)
+        newloadedmodel.to(DEVICE)
+        outputtemp = newloadedmodel.transcribe(str(audio_file_path), word_timestamps=True, language="en")
+        print(outputtemp, 'outputtemp')
+        output = base_whisper_model.transcribe(str(audio_file_path), word_timestamps=True, language="en")
+        print(output, 'output')
+        relevant_info = outputtemp['segments'][0]['words']
         innerHTML = display_words_and_probs(relevant_info)
+        # innerHTML = ""
+
+        # Create data for the pie chart
+        pie_chart_data = {
+            'labels': list(accent_probabilities.keys()),
+            'values': list(accent_probabilities.values())
+        }
+
         return {
             "success": True,
-            "text": relevant_info[0]['word'],
+            "text": relevant_info[0]['word'], # output['text'],
+            "innerHTML": innerHTML,
             "language": "English",
-            "innerHTML": innerHTML
+            "predicted_accent": predicted_accent,
+            "accent_probabilities": pie_chart_data
         }
     except IOError as e:
         print(f"IOError while processing file: {str(e)}")

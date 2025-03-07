@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TREN YER SCOOTESH ACCENT</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -82,6 +83,25 @@
         .low-score {
             color: #e74c3c;  /* Red color for low scores */
         }
+
+        /* Add new styles for the accent section */
+        .accent-section {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        #accentPieChart {
+            max-width: 600px;
+            margin: 20px auto;
+        }
+        
+        .detected-accent {
+            text-align: center;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
@@ -99,6 +119,14 @@
         <div class="status" id="status">Click 'Start Recording' to begin</div>
         <div id="transcription"></div>
         <div id="result"></div>
+        
+        <!-- Add new accent detection section -->
+        <div class="accent-section">
+            <div class="detected-accent">
+                Detected Accent: <span id="detected-accent">-</span>
+            </div>
+            <canvas id="accentPieChart"></canvas>
+        </div>
     </div>
 
     <script>
@@ -115,6 +143,53 @@
 
         recordButton.addEventListener('click', toggleRecording);
         sendButton.addEventListener('click', send);
+        async function handleTranscriptionResult(result) {
+            if (result.success) {
+                document.getElementById('result').innerHTML += result.innerHTML; 
+                transcription.textContent = result.text;
+                status.textContent = `Transcription complete (${result.language})`;
+                
+                // Update accent information
+                document.getElementById('detected-accent').textContent = result.predicted_accent;
+                
+                // Clear any existing chart
+                const existingChart = Chart.getChart("accentPieChart");
+                if (existingChart) {
+                    existingChart.destroy();
+                }
+                
+                // Create new pie chart
+                const ctx = document.getElementById('accentPieChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: result.accent_probabilities.labels,
+                        datasets: [{
+                            data: result.accent_probabilities.values,
+                            backgroundColor: [
+                                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                                '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                            },
+                            title: {
+                                display: true,
+                                text: 'Accent Probability Distribution'
+                            }
+                        }
+                    }
+                });
+            } else {
+                status.textContent = 'Error: ' + result.error;
+            }
+        }
+
         async function send() {
             const audio = document.getElementById('sampleAudio');
             audio.src = "/static/" + scottish_audio_file;
@@ -123,16 +198,8 @@
                 method: 'POST',
                 body: JSON.stringify({ audioFile: "./sample_audio/" + scottish_audio_file })
             });
-
             const result = await response.json();
-                
-            if (result.success) {
-                document.getElementById('result').innerHTML += result.innerHTML; 
-                transcription.textContent = result.text;
-                status.textContent = `Transcription complete (${result.language})`;
-            } else {
-                status.textContent = 'Error: ' + result.error;
-            }
+            handleTranscriptionResult(result);
         }
 
         async function sendEnglish() {
@@ -143,16 +210,8 @@
                 method: 'POST',
                 body: JSON.stringify({ audioFile: './sample_audio/' + southern_audio_file })
             });
-
             const result = await response.json();
-                
-            if (result.success) {
-                document.getElementById('result').innerHTML += result.innerHTML; 
-                transcription.textContent = result.text;
-                status.textContent = `Transcription complete (${result.language})`;
-            } else {
-                status.textContent = 'Error: ' + result.error;
-            }
+            handleTranscriptionResult(result);
         }
 
         async function toggleRecording() {
@@ -204,16 +263,8 @@
                     method: 'POST',
                     body: formData
                 });
-
                 const result = await response.json();
-                
-                if (result.success) {
-                    transcription.textContent = result.text;
-                    document.getElementById('result').innerHTML += result.innerHTML; 
-                    status.textContent = `Transcription complete (${result.language})`;
-                } else {
-                    status.textContent = 'Error: ' + result.error;
-                }
+                handleTranscriptionResult(result);
             } catch (error) {
                 console.error('Error sending audio to server:', error);
                 status.textContent = 'Error sending audio to server';
